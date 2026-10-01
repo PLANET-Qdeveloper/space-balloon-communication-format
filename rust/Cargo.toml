@@ -9,8 +9,5 @@ license = "MIT"
 repository = "https://github.com/PLANET-Qdeveloper/space-balloon-communication-format"
 publish = false
 
-[workspace.dependencies]
-pq-com-format = { path = "crates/pq-com-format" }
-
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -13,16 +13,39 @@ nodes:
 
 tags:
   - tag: 0x01
-    name: pressure
-    type: u32
-    unit: Pa
+    name:
     sources: [main1]
     description: MS5611の気圧
-
+    fields:
+      - name: pressure
+        type: u32
+        unit: Pa
+        scale: 0.001
   - tag: 0x02
     name: temperature
-    type: i16
-    unit: degC
-    scale: 0.01
     sources: [main1]
     description: MS5611の温度
+    fields:
+      - name: temperature
+        type: i16
+        unit: degC
+        scale: 0.01
+  - tag: 0x10
+    name: gps_position
+    sources: [main1]
+    description: GPS位置
+    fields:
+      - name: latitude
+        type: i32
+        unit: deg
+        scale: 1.0e-7
+      - name: longitude
+        type: i32
+        unit: deg
+        scale: 1.0e-7
+      - name: altitude
+        type: i32
+        unit: m
+        scale: 0.001
+      - name: fix_type
+        type: u8

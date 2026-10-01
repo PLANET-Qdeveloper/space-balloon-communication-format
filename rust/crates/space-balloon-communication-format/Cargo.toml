@@ -1,0 +1,15 @@
+[package]
+name = "space-balloon-communication-format"
+description = "スペースバルーン通信フォーマットのエンコード・デコード"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_yaml = "0.9.34"
