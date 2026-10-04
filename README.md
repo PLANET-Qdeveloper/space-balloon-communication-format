@@ -9,8 +9,6 @@
   <img src="https://img.shields.io/github/repo-size/PLANET-Qdeveloper/space-balloon-communication-format?style=for-the-badge" alt="Repo Size" />
 </p>
 
-# 🎈 Space Balloon Communication Format
-
 成層圏気球から、地上へセンサの値を届けるための通信フォーマットです。
 
 PLANET-Q の共通通信フォーマット（`pq_com_format`）をフレームにして、地上のテレメバックエンドが対応表を見ながら中身を読みます。
