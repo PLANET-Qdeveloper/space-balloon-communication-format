@@ -1,10 +1,15 @@
-# 🎈 Space Balloon Communication Format
+<p align="center">
+  <img src="assets/sbcf-icon-full.svg" alt="Space Balloon Communication Format Logo" width="950" />
+</p>
+
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust" />
   <img src="https://img.shields.io/badge/C-00599C?style=for-the-badge&logo=c&logoColor=white" alt="C" />
   <img src="https://img.shields.io/github/license/PLANET-Qdeveloper/space-balloon-communication-format?style=for-the-badge" alt="License" />
   <img src="https://img.shields.io/github/repo-size/PLANET-Qdeveloper/space-balloon-communication-format?style=for-the-badge" alt="Repo Size" />
 </p>
+
+# 🎈 Space Balloon Communication Format
 
 成層圏気球から、地上へセンサの値を届けるための通信フォーマットです。
 
