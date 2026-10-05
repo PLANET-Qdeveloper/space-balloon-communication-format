@@ -77,3 +77,42 @@ cargo test --manifest-path rust/Cargo.toml
 Copyright (C) 2024-2026 PLANET-Q
 
 Copyright (C) 2026- PLANET-Q and WSP
+
+## 🤝 Powered by
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://planet-q.jimdofree.com/">
+        <img src="assets/pq-logo.png" height="70" alt="PLANET-Q" />
+      </a>
+    </td>
+    <td>
+      <a href="https://planet-q.jimdofree.com/"><b>PLANET-Q</b></a>
+    </td>
+    <td>
+      <a href="https://github.com/PLANET-Qdeveloper"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
+      <a href="https://x.com/KU_PLANETQ"><img src="https://img.shields.io/badge/X-000000?style=for-the-badge&logo=x&logoColor=white" alt="X" /></a>
+      <a href="https://www.instagram.com/qu_planetq/"><img src="https://img.shields.io/badge/Instagram-E4405F?style=for-the-badge&logo=instagram&logoColor=white" alt="Instagram" /></a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <a href="http://wsphp.web.fc2.com/">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="assets/wsp-logo-dark.png" />
+          <source media="(prefers-color-scheme: light)" srcset="assets/wsp-logo-light.png" />
+          <img src="assets/wsp-logo-light.png" height="108" alt="WSP" />
+        </picture>
+      </a>
+    </td>
+    <td>
+      <a href="http://wsphp.web.fc2.com/"><b>WSP</b></a>
+    </td>
+    <td>
+      <a href="https://github.com/wsp-space"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
+      <a href="https://x.com/wsp_wakayama"><img src="https://img.shields.io/badge/X-000000?style=for-the-badge&logo=x&logoColor=white" alt="X" /></a>
+      <a href="https://www.instagram.com/wsp.crea/"><img src="https://img.shields.io/badge/Instagram-E4405F?style=for-the-badge&logo=instagram&logoColor=white" alt="Instagram" /></a>
+    </td>
+  </tr>
+</table>
