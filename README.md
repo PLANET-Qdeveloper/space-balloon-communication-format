@@ -102,7 +102,7 @@ Copyright (C) 2026- PLANET-Q and WSP
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="assets/wsp-logo-dark.png" />
           <source media="(prefers-color-scheme: light)" srcset="assets/wsp-logo-light.png" />
-          <img src="assets/wsp-logo-light.png" height="108" alt="WSP" />
+          <img src="assets/wsp-logo-light.png" height="70" alt="WSP" />
         </picture>
       </a>
     </td>
