@@ -1,13 +1,15 @@
-[workspace]
-resolver = "3"
-members = ["crates/*"]
-
-[workspace.package]
+[package]
+name = "space-balloon-communication-format"
+description = "スペースバルーン通信フォーマットのエンコード・デコード"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/PLANET-Qdeveloper/space-balloon-communication-format"
 publish = false
 
-[workspace.lints.rust]
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_yaml = "0.9.34"
+
+[lints.rust]
 unsafe_code = "forbid"
