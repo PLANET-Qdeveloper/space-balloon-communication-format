@@ -1,7 +1,7 @@
 //! スペースバルーン通信フォーマット．
 
+pub mod downlink;
 pub mod format;
-pub mod tag;
 
 #[cfg(test)]
 mod tests;

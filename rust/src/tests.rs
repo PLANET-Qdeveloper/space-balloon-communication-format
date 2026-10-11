@@ -1,5 +1,5 @@
+use crate::downlink::{Field, FieldType, Tag, TagError, read_payload, tags_from_yaml};
 use crate::format::{DecodeError, PayloadError, SpaceBalloonCommunicationFormat};
-use crate::tag::{Field, FieldType, Tag, TagError, read_payload, tags_from_yaml};
 
 fn frame(destination_id: u8, source_id: u8, payload: &[u8]) -> SpaceBalloonCommunicationFormat {
     let mut packet = SpaceBalloonCommunicationFormat::new();
@@ -112,7 +112,7 @@ fn rejects_value_whose_length_does_not_match_fields() {
 
 #[test]
 fn loads_tags_from_downlink_yaml() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../spec/downlink.yaml");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../spec/downlink.yaml");
     let text = std::fs::read_to_string(path).unwrap();
     let tags = tags_from_yaml(&text).unwrap();
 
