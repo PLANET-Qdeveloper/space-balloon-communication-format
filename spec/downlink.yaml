@@ -13,7 +13,7 @@ nodes:
 
 tags:
   - tag: 0x01
-    name:
+    name: pressure
     sources: [main1]
     description: MS5611の気圧
     fields:

@@ -105,19 +105,52 @@ impl SpaceBalloonCommunicationFormat {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PayloadError {
+    /// ペイロードが `MAX_PAYLOAD_LEN` を超えている．
     TooLong,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl std::fmt::Display for PayloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PayloadError::TooLong => {
+                write!(f, "payload is longer than {MAX_PAYLOAD_LEN} bytes")
+            }
+        }
+    }
+}
+
+impl std::error::Error for PayloadError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DecodeError {
+    /// 先頭が 0x7E でない，または途中に 0x7E がある．
     InvalidHeader,
+    /// 末尾が 0x7F でない，または途中に 0x7F がある．
     InvalidFooter,
+    /// 0x7D の後ろが 0x81・0x80・0x7D のどれでもない．
     InvalidStuffing,
+    /// ペイロード長と実際の長さが合わない．
     InvalidLength,
+    /// CRC が合わない．
     InvalidChecksum,
 }
+
+impl std::fmt::Display for DecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = match self {
+            DecodeError::InvalidHeader => "invalid start marker",
+            DecodeError::InvalidFooter => "invalid end marker",
+            DecodeError::InvalidStuffing => "invalid byte stuffing",
+            DecodeError::InvalidLength => "payload length does not match the frame",
+            DecodeError::InvalidChecksum => "checksum mismatch",
+        };
+        f.write_str(message)
+    }
+}
+
+impl std::error::Error for DecodeError {}
 
 fn stuff_byte(b: u8) -> Option<[u8; 2]> {
     match b {

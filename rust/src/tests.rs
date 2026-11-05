@@ -1,5 +1,8 @@
 use crate::format::{DecodeError, PayloadError, SpaceBalloonCommunicationFormat, crc16};
-use crate::tag::{DecodedTag, Field, FieldType, Tag, TagError, read_payload, tags_from_yaml};
+use crate::tag::{
+    CatalogError, DecodedTag, Field, FieldType, Tag, TagError, field_size, read_payload,
+    tags_from_yaml,
+};
 
 // ---------------------------------------------------------------------------
 // 共通
@@ -224,7 +227,7 @@ fn loads_tags_from_downlink_yaml() {
 
     let pressure = &tags[0];
     assert_eq!(pressure.get_id(), 0x01);
-    assert_eq!(pressure.get_name(), "");
+    assert_eq!(pressure.get_name(), "pressure");
     assert_eq!(pressure.get_fields()[0].get_name(), "pressure");
     assert_eq!(pressure.get_fields()[0].get_type(), FieldType::U32);
     assert_eq!(pressure.get_fields()[0].get_scale(), 0.001);
@@ -241,4 +244,89 @@ fn loads_tags_from_downlink_yaml() {
     let decoded = read_payload(&PRESSURE_TLV, &tags).unwrap();
     let (_, raws) = known(&decoded[0]);
     assert_eq!(raws, &[101_325]);
+}
+
+/// yaml に書くタグ 1 つ分：(番号, 名前, [(フィールド名, 型)])．
+type TagSpec<'a> = (u8, &'a str, &'a [(&'a str, &'a str)]);
+
+/// タグを並べた yaml を作る．
+fn catalog_yaml(tags: &[TagSpec]) -> String {
+    let mut text = String::from("tags:\n");
+    for (id, name, fields) in tags {
+        text += &format!("  - tag: {id}\n    name: \"{name}\"\n    fields:\n");
+        for (field_name, field_type) in *fields {
+            text += &format!("      - name: {field_name}\n        type: {field_type}\n");
+        }
+    }
+    text
+}
+
+#[test]
+fn field_size_matches_each_type() {
+    assert_eq!(field_size(FieldType::U8), 1);
+    assert_eq!(field_size(FieldType::I16), 2);
+    assert_eq!(field_size(FieldType::U32), 4);
+    assert_eq!(field_size(FieldType::I32), 4);
+}
+
+#[test]
+fn rejects_duplicate_tag_id() {
+    let text = catalog_yaml(&[(1, "a", &[("x", "u8")]), (1, "b", &[("y", "u8")])]);
+    assert!(matches!(
+        tags_from_yaml(&text),
+        Err(CatalogError::DuplicateTag(1))
+    ));
+}
+
+#[test]
+fn rejects_empty_tag_name() {
+    let text = catalog_yaml(&[(1, "", &[("x", "u8")])]);
+    assert!(matches!(
+        tags_from_yaml(&text),
+        Err(CatalogError::EmptyName(1))
+    ));
+}
+
+#[test]
+fn rejects_unknown_field_type() {
+    let text = catalog_yaml(&[(1, "a", &[("x", "f128")])]);
+    assert!(matches!(
+        tags_from_yaml(&text),
+        Err(CatalogError::UnknownType(ref name)) if name == "f128"
+    ));
+}
+
+#[test]
+fn accepts_value_up_to_max_and_rejects_longer() {
+    // i32 を 63 個（252 バイト）＋ u8 で，ちょうど MAX_VALUE_LEN（253 バイト）
+    let mut fields = vec![("x", "i32"); 63];
+    fields.push(("y", "u8"));
+    assert!(tags_from_yaml(&catalog_yaml(&[(1, "a", &fields)])).is_ok());
+
+    // もう 1 バイト足すと送れない
+    fields.push(("z", "u8"));
+    assert!(matches!(
+        tags_from_yaml(&catalog_yaml(&[(1, "a", &fields)])),
+        Err(CatalogError::ValueTooLong { id: 1, len: 254 })
+    ));
+}
+
+#[test]
+fn errors_have_readable_messages() {
+    assert_eq!(
+        TagError::LengthMismatch {
+            id: 0x10,
+            actual: 4
+        }
+        .to_string(),
+        "tag 0x10: length 4 does not match its fields"
+    );
+    assert_eq!(
+        DecodeError::InvalidChecksum.to_string(),
+        "checksum mismatch"
+    );
+    assert_eq!(
+        CatalogError::DuplicateTag(0x01).to_string(),
+        "tag 0x01 is defined more than once"
+    );
 }

@@ -114,6 +114,20 @@ pub enum TagError {
     LengthMismatch { id: u8, actual: usize },
 }
 
+impl std::fmt::Display for TagError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TagError::Truncated => write!(f, "TLV is truncated"),
+            TagError::LengthMismatch { id, actual } => write!(
+                f,
+                "tag 0x{id:02X}: length {actual} does not match its fields"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for TagError {}
+
 /// TLV の並びを先頭から順に読む．
 pub fn read_payload<'a>(payload: &[u8], tags: &'a [Tag]) -> Result<Vec<DecodedTag<'a>>, TagError> {
     let mut rest = payload;
@@ -171,20 +185,97 @@ fn read_raw(field_type: FieldType, cursor: &mut &[u8]) -> Option<i64> {
     })
 }
 
+/// 型のバイト数．`read_raw` に実際に読ませて，進んだ分を数える．
+/// サイズは `read_raw` の中にだけ書き，ここで二重に持たないためにこうしている．
+pub(crate) fn field_size(field_type: FieldType) -> usize {
+    /// どの型よりも大きいバッファ．
+    const BUF_LEN: usize = 8;
+    let buf = [0u8; BUF_LEN];
+    let mut cursor = &buf[..];
+    read_raw(field_type, &mut cursor)
+        .expect("BUF_LEN must be at least the size of every FieldType");
+    buf.len() - cursor.len()
+}
+
 // ---------------------------------------------------------------------------
 // yaml からの読み込み
 // ---------------------------------------------------------------------------
 
+/// 1 つのタグの Value の最大長．
+/// ペイロードは最大 255 バイトで，そこに Tag と Length の 2 バイトも入るので 253．
+pub const MAX_VALUE_LEN: usize = crate::format::MAX_PAYLOAD_LEN - 2;
+
 #[derive(Debug)]
 pub enum CatalogError {
+    /// yaml として読めない，または必要な項目がない．
     Yaml(serde_yaml::Error),
+    /// `type` が対応していない型．
     UnknownType(String),
+    /// 同じタグ番号が 2 回以上書かれている．
+    DuplicateTag(u8),
+    /// `name` が空．
+    EmptyName(u8),
+    /// フィールドの合計が `MAX_VALUE_LEN` を超えていて，送れない．
+    ValueTooLong { id: u8, len: usize },
+}
+
+impl std::fmt::Display for CatalogError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogError::Yaml(error) => write!(f, "invalid yaml: {error}"),
+            CatalogError::UnknownType(text) => write!(f, "unknown field type `{text}`"),
+            CatalogError::DuplicateTag(id) => write!(f, "tag 0x{id:02X} is defined more than once"),
+            CatalogError::EmptyName(id) => write!(f, "tag 0x{id:02X} has no name"),
+            CatalogError::ValueTooLong { id, len } => write!(
+                f,
+                "tag 0x{id:02X}: fields total {len} bytes, more than {MAX_VALUE_LEN}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for CatalogError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            CatalogError::Yaml(error) => Some(error),
+            _ => None,
+        }
+    }
 }
 
 /// `downlink.yaml` の形式からタグの定義を作る．
+/// 読み込んだあと，送れないタグや重複がないかを確認する．
 pub fn tags_from_yaml(text: &str) -> Result<Vec<Tag>, CatalogError> {
     let file: CatalogFile = serde_yaml::from_str(text).map_err(CatalogError::Yaml)?;
-    file.tags.into_iter().map(CatalogTag::into_tag).collect()
+    let tags = file
+        .tags
+        .into_iter()
+        .map(CatalogTag::into_tag)
+        .collect::<Result<Vec<_>, _>>()?;
+    validate(&tags)?;
+    Ok(tags)
+}
+
+/// 形は正しいが中身がおかしい定義を弾く．
+fn validate(tags: &[Tag]) -> Result<(), CatalogError> {
+    let mut seen = [false; 256];
+    for tag in tags {
+        if std::mem::replace(&mut seen[usize::from(tag.id)], true) {
+            return Err(CatalogError::DuplicateTag(tag.id));
+        }
+        if tag.name.is_empty() {
+            return Err(CatalogError::EmptyName(tag.id));
+        }
+        let len = tag
+            .fields
+            .iter()
+            .map(|field| field_size(field.field_type))
+            .sum();
+        if len > MAX_VALUE_LEN {
+            return Err(CatalogError::ValueTooLong { id: tag.id, len });
+        }
+    }
+    Ok(())
 }
 
 #[derive(serde::Deserialize)]
