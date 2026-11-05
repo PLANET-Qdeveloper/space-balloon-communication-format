@@ -1,19 +1,31 @@
 //! フレームのエンコード・デコード．
+//!
+//! フレームの形（`0x7E` と `0x7F` の間はスタッフィングする）:
+//!
+//! ```text
+//! [0x7E, 宛先ID, 送信元ID, ペイロード長, ペイロード..., CRC上位, CRC下位, 0x7F]
+//!        └──────────── CRC の範囲 ────────────┘
+//! ```
+//!
+//! CRC はスタッフィング前の「宛先ID・送信元ID・ペイロード長・ペイロード」に対して計算する．
+
+/// ペイロードの最大長．フレームのペイロード長が 1 バイトなので 255．
+pub const MAX_PAYLOAD_LEN: usize = 255;
+
+/// 宛先ID・送信元ID・ペイロード長の 3 バイト．
+const HEADER_LEN: usize = 3;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SpaceBalloonCommunicationFormat {
-    destination_id: u8,  /*宛先ID */
-    source_id: u8,       /*送信元ID */
-    payload_length: u16, /* ペイロードのバイト数 */
-    payload: [u8; 255],  /* 実データ（TLVの並び） */
+    destination_id: u8,
+    source_id: u8,
+    /// 実データ（TLV の並び）．長さは `MAX_PAYLOAD_LEN` 以下．
+    payload: Vec<u8>,
 }
 
 impl SpaceBalloonCommunicationFormat {
     pub fn new() -> Self {
-        Self {
-            destination_id: 0,
-            source_id: 0,
-            payload_length: 0,
-            payload: [0; 255],
-        }
+        Self::default()
     }
 
     pub fn get_destination_id(&self) -> u8 {
@@ -32,38 +44,29 @@ impl SpaceBalloonCommunicationFormat {
         self.source_id = source_id;
     }
 
-    pub fn get_payload_length(&self) -> u16 {
-        self.payload_length
-    }
-
     pub fn get_payload(&self) -> &[u8] {
-        &self.payload[..usize::from(self.payload_length as u8)]
+        &self.payload
     }
 
     pub fn set_payload(&mut self, payload: &[u8]) -> Result<(), PayloadError> {
-        if payload.len() > self.payload.len() {
+        if payload.len() > MAX_PAYLOAD_LEN {
             return Err(PayloadError::TooLong);
         }
-        self.payload[..payload.len()].copy_from_slice(payload);
-        self.payload[payload.len()..].fill(0);
-        self.payload_length = payload.len() as u16;
+        self.payload = payload.to_vec();
         Ok(())
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        let len = usize::from(self.payload_length as u8);
-        let payload = &self.payload[..len];
-        let crc = crc16(payload);
-
-        let mut body = Vec::new();
-        body.push(self.destination_id);
-        body.push(self.source_id);
-        body.push(len as u8);
-        body.extend_from_slice(payload);
-        body.extend_from_slice(&crc.to_be_bytes());
+        // set_payload で MAX_PAYLOAD_LEN 以下にしてあるので u8 に収まる
+        let header = [
+            self.destination_id,
+            self.source_id,
+            self.payload.len() as u8,
+        ];
+        let crc = crc16(header.iter().chain(&self.payload)).to_be_bytes();
 
         let mut frame = vec![0x7E];
-        for byte in body {
+        for &byte in header.iter().chain(&self.payload).chain(&crc) {
             match stuff_byte(byte) {
                 Some(pair) => frame.extend_from_slice(&pair),
                 None => frame.push(byte),
@@ -79,28 +82,25 @@ impl SpaceBalloonCommunicationFormat {
             [0x7E, ..] => return Err(DecodeError::InvalidFooter),
             _ => return Err(DecodeError::InvalidHeader),
         };
+        // body = [宛先ID, 送信元ID, ペイロード長, ペイロード..., CRC上位, CRC下位]
         let body = unstuff_bytes(interior)?;
-        let (&destination_id, &source_id, &len, rest) = match body.as_slice() {
-            [destination_id, source_id, len, rest @ ..] => (destination_id, source_id, len, rest),
-            _ => return Err(DecodeError::InvalidLength),
+        let [destination_id, source_id, len, ..] = body[..] else {
+            return Err(DecodeError::InvalidLength);
         };
-        let (payload_bytes, crc_bytes) = rest
-            .split_at_checked(usize::from(len))
+        let (covered, crc_bytes) = body
+            .split_at_checked(HEADER_LEN + usize::from(len))
             .ok_or(DecodeError::InvalidLength)?;
         let crc_bytes: [u8; 2] = crc_bytes
             .try_into()
             .map_err(|_| DecodeError::InvalidLength)?;
-        if crc16(payload_bytes) != u16::from_be_bytes(crc_bytes) {
+        if crc16(covered) != u16::from_be_bytes(crc_bytes) {
             return Err(DecodeError::InvalidChecksum);
         }
 
-        let mut payload = [0; 255];
-        payload[..payload_bytes.len()].copy_from_slice(payload_bytes);
         Ok(Self {
             destination_id,
             source_id,
-            payload_length: u16::from(len),
-            payload,
+            payload: covered[HEADER_LEN..].to_vec(),
         })
     }
 }
@@ -147,9 +147,11 @@ fn unstuff_bytes(interior: &[u8]) -> Result<Vec<u8>, DecodeError> {
     Ok(out)
 }
 
-fn crc16(payload: &[u8]) -> u16 {
+/// CRC-16/CCITT-FALSE（多項式 0x1021，初期値 0xFFFF）．
+/// バイトを順に返すものなら何でも受け取れるので，配列をつなげずに計算できる．
+pub(crate) fn crc16<'a>(bytes: impl IntoIterator<Item = &'a u8>) -> u16 {
     let mut crc = 0xFFFFu16;
-    for &byte in payload {
+    for &byte in bytes {
         crc ^= u16::from(byte) << 8;
         for _ in 0..8 {
             crc = if crc & 0x8000 == 0 {
