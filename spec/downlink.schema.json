@@ -1,15 +1,119 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://github.com/PLANET-Qdeveloper/pq_com_format/spec/downlink.schema.json",
+    "$id": "https://github.com/PLANET-Qdeveloper/space-balloon-communication-format/spec/downlink.schema.json",
     "title": "space-balloon-communication-format downlink data table",
-    "description": "pq_com_format のパケット(宛先ID/送信元ID/TLVタグ)をバックエンドで解釈するための対応表",
+    "description": "パケット(宛先ID/送信元ID/TLVタグ)をバックエンドで解釈するための対応表。タグ番号の重複・Value の合計長(253バイト以下)・sources と nodes の対応はスキーマでは確認できないため、各言語の実装で確認する。",
     "type": "object",
-    "required": ["未定"], 
+    "required": ["spec_version", "tags"],
     "additionalProperties": false,
     "properties": {
-
+        "spec_version": {
+            "description": "この対応表の形式のバージョン(例: 0.1.0)",
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "nodes": {
+            "description": "通信するノード(機体・地上局など)の一覧",
+            "type": "array",
+            "items": { "$ref": "#/$defs/node" }
+        },
+        "tags": {
+            "description": "TLV タグの一覧",
+            "type": "array",
+            "items": { "$ref": "#/$defs/tag" }
+        }
     },
     "$defs": {
-
+        "byte": {
+            "description": "1 バイトの値(0〜255)",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+        },
+        "hex_byte": {
+            "description": "1 バイトの値を 16 進で書いた文字列(例: \"0x10\")",
+            "type": "string",
+            "pattern": "^0[xX][0-9A-Fa-f]{1,2}$"
+        },
+        "identifier": {
+            "description": "名前。どの言語でも変数名に使えるよう snake_case に限る",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "node": {
+            "type": "object",
+            "required": ["id", "name"],
+            "additionalProperties": false,
+            "properties": {
+                "id": {
+                    "description": "フレームの宛先ID・送信元IDに入る番号",
+                    "$ref": "#/$defs/byte"
+                },
+                "name": {
+                    "description": "ノード名。tags の sources から参照する",
+                    "$ref": "#/$defs/identifier"
+                },
+                "description": {
+                    "description": "説明",
+                    "type": "string"
+                }
+            }
+        },
+        "tag": {
+            "type": "object",
+            "required": ["tag", "name", "fields"],
+            "additionalProperties": false,
+            "properties": {
+                "tag": {
+                    "description": "TLV の Tag に入る番号。整数でも 16 進文字列でもよい",
+                    "oneOf": [
+                        { "$ref": "#/$defs/byte" },
+                        { "$ref": "#/$defs/hex_byte" }
+                    ]
+                },
+                "name": {
+                    "description": "タグ名",
+                    "$ref": "#/$defs/identifier"
+                },
+                "sources": {
+                    "description": "このタグを送るノードの名前(nodes の name)",
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/identifier" }
+                },
+                "description": {
+                    "description": "説明",
+                    "type": "string"
+                },
+                "fields": {
+                    "description": "Value の中身。上から順にリトルエンディアンで並ぶ",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/$defs/field" }
+                }
+            }
+        },
+        "field": {
+            "type": "object",
+            "required": ["name", "type"],
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "description": "フィールド名",
+                    "$ref": "#/$defs/identifier"
+                },
+                "type": {
+                    "description": "値の型。何バイト読むかもこれで決まる(u8: 1, i16: 2, u32: 4, i32: 4)",
+                    "enum": ["u8", "i16", "u32", "i32"]
+                },
+                "unit": {
+                    "description": "物理量の単位(例: Pa, degC, deg, m)",
+                    "type": "string"
+                },
+                "scale": {
+                    "description": "raw にかけて物理量にする係数。省略時は 1.0",
+                    "type": "number"
+                }
+            }
+        }
     }
 }
