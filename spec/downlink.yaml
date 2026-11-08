@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./downlink.schema.json
 # ダウンリンデータ対応表
 # ※例
 
@@ -13,7 +14,7 @@ nodes:
 
 tags:
   - tag: 0x01
-    name:
+    name: pressure
     sources: [main1]
     description: MS5611の気圧
     fields:
