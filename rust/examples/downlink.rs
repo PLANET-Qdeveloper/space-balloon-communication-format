@@ -1,26 +1,30 @@
-//! 受信したフレームから，downlink.yaml の定義に従って値を読む．
+//! downlink.yaml の定義を使って，送る側でフレームを作り，受ける側で値を読む．
 //!
 //! 実行: `cargo run --example downlink`
 
+use space_balloon_communication_format::catalog::tags_from_yaml;
 use space_balloon_communication_format::format::SpaceBalloonCommunicationFormat;
-use space_balloon_communication_format::tag::{DecodedTag, read_payload, tags_from_yaml};
+use space_balloon_communication_format::payload::{DecodedTag, read_payload, write_tag};
+use space_balloon_communication_format::tag::{Field, FieldType, Tag};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+type Error = Box<dyn std::error::Error>;
+
+fn main() -> Result<(), Error> {
     // 起動時に 1 回だけ定義を読み込む（以降はずっと持っておく）
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../spec/downlink.yaml");
     let tags = tags_from_yaml(&std::fs::read_to_string(path)?)?;
 
-    // 機体から届いたフレームの代わりに，ここで作っておく
-    let received = sample_frame()?;
+    // ---- 送る側（機体）----
+    let sent = build_frame(&tags)?;
+    println!("sent {} bytes", sent.len());
 
-    // フレームを開いて，ペイロードの TLV を読む
-    let frame = SpaceBalloonCommunicationFormat::decode(&received)?;
+    // ---- 受ける側（地上局）----
+    let frame = SpaceBalloonCommunicationFormat::decode(&sent)?;
     println!(
         "from 0x{:02X} to 0x{:02X}",
         frame.get_source_id(),
         frame.get_destination_id()
     );
-
     for decoded in read_payload(frame.get_payload(), &tags)? {
         match decoded {
             DecodedTag::Known { tag, raws } => {
@@ -43,30 +47,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// 気圧・定義にないタグ・GPS の 3 つを入れたフレーム．
-fn sample_frame() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+/// 気圧・GPS と，受ける側が知らないタグを 1 つ入れたフレームを作る．
+fn build_frame(tags: &[Tag]) -> Result<Vec<u8>, Error> {
+    let find = |name: &str| {
+        tags.iter()
+            .find(|tag| tag.get_name() == name)
+            .ok_or(format!("tag `{name}` is not defined"))
+    };
+    let pressure = find("pressure")?;
+    let gps = find("gps_position")?;
+    // 受ける側の yaml にないタグ（新しいセンサーを足した場合など）
+    let extra = Tag::new(
+        0x7A,
+        "extra",
+        vec![Field::new("x", FieldType::I16, None, 1.0)],
+    );
+
     let mut payload = Vec::new();
-    // 0x01 気圧（u32）：raw 101325 × scale 0.001
-    push_tlv(&mut payload, 0x01, &101_325u32.to_le_bytes());
-    // 0x7A 定義にないタグ：読み飛ばされる
-    push_tlv(&mut payload, 0x7A, &[0xAA, 0xBB]);
-    // 0x10 GPS（i32, i32, i32, u8）：福岡あたり
-    let mut gps = Vec::new();
-    gps.extend_from_slice(&335_902_000i32.to_le_bytes()); // 緯度 33.5902 deg
-    gps.extend_from_slice(&1_304_017_000i32.to_le_bytes()); // 経度 130.4017 deg
-    gps.extend_from_slice(&30_500_000i32.to_le_bytes()); // 高度 30500 m
-    gps.push(3); // 3D fix
-    push_tlv(&mut payload, 0x10, &gps);
+    // 物理量から raw にするときは to_raw を使う
+    let fields = gps.get_fields();
+    write_tag(
+        &mut payload,
+        pressure,
+        &[pressure.get_fields()[0].to_raw(101.325)],
+    )?;
+    write_tag(&mut payload, &extra, &[-1])?;
+    write_tag(
+        &mut payload,
+        gps,
+        &[
+            fields[0].to_raw(33.5902),  // 緯度 deg
+            fields[1].to_raw(130.4017), // 経度 deg
+            fields[2].to_raw(30_500.0), // 高度 m
+            3,                          // 3D fix
+        ],
+    )?;
 
     let mut packet = SpaceBalloonCommunicationFormat::new();
-    packet.set_destination_id(0x01);
-    packet.set_source_id(0x10);
+    packet.set_destination_id(0x01); // ground_station
+    packet.set_source_id(0x10); // main1
     packet.set_payload(&payload)?;
     Ok(packet.encode())
-}
-
-fn push_tlv(payload: &mut Vec<u8>, id: u8, value: &[u8]) {
-    payload.push(id);
-    payload.push(value.len() as u8);
-    payload.extend_from_slice(value);
 }
