@@ -1,5 +1,6 @@
 //! テスト．モジュールごとにファイルを分け，共通で使うものはここに置く．
 
+#[cfg(feature = "catalog")]
 mod catalog;
 mod format;
 mod payload;

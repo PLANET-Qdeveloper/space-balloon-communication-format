@@ -1,14 +1,10 @@
 //! yaml（`spec/downlink.yaml` の形式）からタグの定義を読み込む．
 //!
+//! feature `catalog`（default で有効）のときだけ使える．
 //! 形の確認（必要な項目・型名）は読み込みのときに，中身の確認（番号の重複・
-//! 空の名前・Value の長さ）は読み込んだあとに行う．
+//! 空の名前・Value の長さ）は読み込んだあとに `tag::validate_tags` で行う．
 
-use crate::format::MAX_PAYLOAD_LEN;
-use crate::tag::{Field, FieldType, Tag};
-
-/// 1 つのタグの Value の最大長．
-/// ペイロードは最大 255 バイトで，そこに Tag と Length の 2 バイトも入るので 253．
-pub const MAX_VALUE_LEN: usize = MAX_PAYLOAD_LEN - 2;
+use crate::tag::{Field, FieldType, Tag, TagDefinitionError, validate_tags};
 
 #[derive(Debug)]
 pub enum CatalogError {
@@ -16,12 +12,8 @@ pub enum CatalogError {
     Yaml(serde_yaml::Error),
     /// `type` が対応していない型．
     UnknownType(String),
-    /// 同じタグ番号が 2 回以上書かれている．
-    DuplicateTag(u8),
-    /// `name` が空．
-    EmptyName(u8),
-    /// フィールドの合計が `MAX_VALUE_LEN` を超えていて，送れない．
-    ValueTooLong { id: u8, len: usize },
+    /// 読み込めたが，定義の中身がおかしい．
+    Invalid(TagDefinitionError),
 }
 
 impl std::fmt::Display for CatalogError {
@@ -29,12 +21,7 @@ impl std::fmt::Display for CatalogError {
         match self {
             CatalogError::Yaml(error) => write!(f, "invalid yaml: {error}"),
             CatalogError::UnknownType(text) => write!(f, "unknown field type `{text}`"),
-            CatalogError::DuplicateTag(id) => write!(f, "tag 0x{id:02X} is defined more than once"),
-            CatalogError::EmptyName(id) => write!(f, "tag 0x{id:02X} has no name"),
-            CatalogError::ValueTooLong { id, len } => write!(
-                f,
-                "tag 0x{id:02X}: fields total {len} bytes, more than {MAX_VALUE_LEN}"
-            ),
+            CatalogError::Invalid(error) => write!(f, "invalid tag definition: {error}"),
         }
     }
 }
@@ -43,8 +30,15 @@ impl std::error::Error for CatalogError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             CatalogError::Yaml(error) => Some(error),
-            _ => None,
+            CatalogError::Invalid(error) => Some(error),
+            CatalogError::UnknownType(_) => None,
         }
+    }
+}
+
+impl From<TagDefinitionError> for CatalogError {
+    fn from(error: TagDefinitionError) -> Self {
+        CatalogError::Invalid(error)
     }
 }
 
@@ -56,27 +50,8 @@ pub fn tags_from_yaml(text: &str) -> Result<Vec<Tag>, CatalogError> {
         .into_iter()
         .map(CatalogTag::into_tag)
         .collect::<Result<Vec<_>, _>>()?;
-    validate(&tags)?;
+    validate_tags(&tags)?;
     Ok(tags)
-}
-
-/// 形は正しいが中身がおかしい定義を弾く．
-fn validate(tags: &[Tag]) -> Result<(), CatalogError> {
-    let mut seen = [false; 256];
-    for tag in tags {
-        let id = tag.get_id();
-        if std::mem::replace(&mut seen[usize::from(id)], true) {
-            return Err(CatalogError::DuplicateTag(id));
-        }
-        if tag.get_name().is_empty() {
-            return Err(CatalogError::EmptyName(id));
-        }
-        let len = tag.value_len();
-        if len > MAX_VALUE_LEN {
-            return Err(CatalogError::ValueTooLong { id, len });
-        }
-    }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------

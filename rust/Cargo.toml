@@ -7,9 +7,18 @@ license = "MIT"
 repository = "https://github.com/PLANET-Qdeveloper/space-balloon-communication-format"
 publish = false
 
+[features]
+default = ["catalog"]
+# yaml からタグの定義を読み込む（catalog モジュール）
+catalog = ["dep:serde", "dep:serde_yaml"]
+
 [dependencies]
-serde = { version = "1.0.229", features = ["derive"] }
-serde_yaml = "0.9.34"
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+serde_yaml = { version = "0.9.34", optional = true }
+
+[[example]]
+name = "downlink"
+required-features = ["catalog"]
 
 [lints.rust]
 unsafe_code = "forbid"

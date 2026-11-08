@@ -104,6 +104,62 @@ impl Tag {
 }
 
 // ---------------------------------------------------------------------------
+// 定義の確認
+// ---------------------------------------------------------------------------
+
+/// 1 つのタグの Value の最大長．
+/// ペイロードは最大 255 バイトで，そこに Tag と Length の 2 バイトも入るので 253．
+pub const MAX_VALUE_LEN: usize = crate::format::MAX_PAYLOAD_LEN - 2;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TagDefinitionError {
+    /// 同じタグ番号が 2 回以上ある．
+    DuplicateTag(u8),
+    /// 名前が空．
+    EmptyName(u8),
+    /// フィールドの合計が `MAX_VALUE_LEN` を超えていて，送れない．
+    ValueTooLong { id: u8, len: usize },
+}
+
+impl std::fmt::Display for TagDefinitionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TagDefinitionError::DuplicateTag(id) => {
+                write!(f, "tag 0x{id:02X} is defined more than once")
+            }
+            TagDefinitionError::EmptyName(id) => write!(f, "tag 0x{id:02X} has no name"),
+            TagDefinitionError::ValueTooLong { id, len } => write!(
+                f,
+                "tag 0x{id:02X}: fields total {len} bytes, more than {MAX_VALUE_LEN}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for TagDefinitionError {}
+
+/// タグの定義の並びに，送れないタグや番号の重複がないか確かめる．
+///
+/// yaml から読み込んだ定義は `catalog::tags_from_yaml` の中で確かめる．
+/// コードで組み立てた定義は，使う前にこれを呼ぶこと．
+pub fn validate_tags(tags: &[Tag]) -> Result<(), TagDefinitionError> {
+    let mut seen = [false; 256];
+    for tag in tags {
+        if std::mem::replace(&mut seen[usize::from(tag.id)], true) {
+            return Err(TagDefinitionError::DuplicateTag(tag.id));
+        }
+        if tag.name.is_empty() {
+            return Err(TagDefinitionError::EmptyName(tag.id));
+        }
+        let len = tag.value_len();
+        if len > MAX_VALUE_LEN {
+            return Err(TagDefinitionError::ValueTooLong { id: tag.id, len });
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // 型ごとのバイト変換
 //
 // 型と Rust の整数型の対応（U8 → u8 など）は `read_raw` と `write_raw` の 2 か所に

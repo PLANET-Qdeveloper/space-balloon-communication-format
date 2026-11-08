@@ -1,7 +1,7 @@
 use super::{PRESSURE_TLV, known};
 use crate::catalog::{CatalogError, tags_from_yaml};
 use crate::payload::read_payload;
-use crate::tag::FieldType;
+use crate::tag::{FieldType, TagDefinitionError};
 
 /// yaml に書くタグ 1 つ分：(番号, 名前, [(フィールド名, 型)])．
 type TagSpec<'a> = (u8, &'a str, &'a [(&'a str, &'a str)]);
@@ -46,24 +46,6 @@ fn loads_tags_from_downlink_yaml() {
 }
 
 #[test]
-fn rejects_duplicate_tag_id() {
-    let text = catalog_yaml(&[(1, "a", &[("x", "u8")]), (1, "b", &[("y", "u8")])]);
-    assert!(matches!(
-        tags_from_yaml(&text),
-        Err(CatalogError::DuplicateTag(1))
-    ));
-}
-
-#[test]
-fn rejects_empty_tag_name() {
-    let text = catalog_yaml(&[(1, "", &[("x", "u8")])]);
-    assert!(matches!(
-        tags_from_yaml(&text),
-        Err(CatalogError::EmptyName(1))
-    ));
-}
-
-#[test]
 fn rejects_unknown_field_type() {
     let text = catalog_yaml(&[(1, "a", &[("x", "f128")])]);
     assert!(matches!(
@@ -72,25 +54,28 @@ fn rejects_unknown_field_type() {
     ));
 }
 
+/// 中身の確認（validate_tags）が yaml の読み込みでも行われること．
+/// 確認の中身そのものは tests/tag.rs で確かめる．
 #[test]
-fn accepts_value_up_to_max_and_rejects_longer() {
-    // i32 を 63 個（252 バイト）＋ u8 で，ちょうど MAX_VALUE_LEN（253 バイト）
-    let mut fields = vec![("x", "i32"); 63];
-    fields.push(("y", "u8"));
-    assert!(tags_from_yaml(&catalog_yaml(&[(1, "a", &fields)])).is_ok());
-
-    // もう 1 バイト足すと送れない
-    fields.push(("z", "u8"));
+fn validates_definitions_after_loading() {
+    let duplicate = catalog_yaml(&[(1, "a", &[("x", "u8")]), (1, "b", &[("y", "u8")])]);
     assert!(matches!(
-        tags_from_yaml(&catalog_yaml(&[(1, "a", &fields)])),
-        Err(CatalogError::ValueTooLong { id: 1, len: 254 })
+        tags_from_yaml(&duplicate),
+        Err(CatalogError::Invalid(TagDefinitionError::DuplicateTag(1)))
+    ));
+
+    let empty_name = catalog_yaml(&[(1, "", &[("x", "u8")])]);
+    assert!(matches!(
+        tags_from_yaml(&empty_name),
+        Err(CatalogError::Invalid(TagDefinitionError::EmptyName(1)))
     ));
 }
 
 #[test]
 fn catalog_error_has_readable_message() {
+    let error = CatalogError::Invalid(TagDefinitionError::DuplicateTag(0x01));
     assert_eq!(
-        CatalogError::DuplicateTag(0x01).to_string(),
-        "tag 0x01 is defined more than once"
+        error.to_string(),
+        "invalid tag definition: tag 0x01 is defined more than once"
     );
 }
