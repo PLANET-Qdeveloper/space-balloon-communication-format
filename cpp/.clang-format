@@ -1,0 +1,5 @@
+BasedOnStyle: LLVM
+ColumnLimit: 200
+AllowAllParametersOfDeclarationOnNextLine: false
+# クラスの中の短い getter / setter は 1 行で書く
+AllowShortFunctionsOnASingleLine: Inline
