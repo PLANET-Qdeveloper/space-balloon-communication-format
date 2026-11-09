@@ -5,49 +5,44 @@
 extern "C" {
 #endif
 
-#include "stdint.h"
+#include <stddef.h>
+#include <stdint.h>
+
+/** ペイロードの最大長（ペイロード長は 1 バイトで表す） */
 #define SPACE_BALLOON_COMMUNICATION_FORMAT_MAX_PAYLOAD_SIZE 255
-#define SPACE_BALLOON_COMMUNICATION_FORMAT_MAX_PACKET_SIZE (SPACE_BALLOON_COMMUNICATION_FORMAT_MAX_PAYLOAD_SIZE + 6)
+/**
+ * エンコードしたフレームの最大長．
+ * 開始・終了マーカー 2 バイトと，ヘッダ 3 + ペイロード + CRC 2 がすべてスタッフィングで 2 倍になった場合．
+ */
+#define SPACE_BALLOON_COMMUNICATION_FORMAT_MAX_FRAME_SIZE \
+  (2 + 2 * (3 + SPACE_BALLOON_COMMUNICATION_FORMAT_MAX_PAYLOAD_SIZE + 2))
 
 #define SPACE_BALLOON_COMMUNICATION_FORMAT_START_MARKER 0x7E
 #define SPACE_BALLOON_COMMUNICATION_FORMAT_END_MARKER 0x7F
-
+#define SPACE_BALLOON_COMMUNICATION_FORMAT_ESCAPE 0x7D
 
 /**
  * @enum space_balloon_communication_format_decode_result_t
- * @brief デコードの状況を示す
+ * @brief 1 バイト読んだ結果
  */
 typedef enum {
-  /** 有効なデータをデコードした */
+  /** 読んだ．フレームはまだ続く */
   SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_VALID = 0,
-  /** データのデコードが完了 */
+  /** フレームを読み終えた．decoder->packet に中身が入っている */
   SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_COMPLETED = 1,
-  /** ヘッダが無効 */
+  /** 開始マーカーを待っている間に別のバイトが来た */
   SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_INVALID_HEADER = -1,
-  /** フッタが無効 */
+  /** 終了マーカーの位置がおかしい */
   SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_INVALID_FOOTER = -2,
-  /** チェックサムが無効 */
+  /** CRC が合わない */
   SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_INVALID_CHECKSUM = -3,
-  /** 未定義のエラー */
-  SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_UNDEFINED = -255,
+  /** 0x7D のあとに決められていないバイトが来た */
+  SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_INVALID_STUFFING = -4,
 } space_balloon_communication_format_decode_result_t;
 
 /**
- * @enum space_balloon_communication_format_encode_result_t
- * @brief エンコードの状況を示す
- */
-typedef enum {
-  /** 有効なデータをエンコードした */
-  SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_SUCCESS = 0,
-  /** エンコードが完了 */
-  SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_COMPLETED = 1,
-  /** 未定義のエラー */
-  SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_ERROR_UNDEFINED = -255,
-} space_balloon_communication_format_encode_result_t;
-
-/**
  * @struct space_balloon_communication_format_t
- * @brief パケットのデータを格納する構造体  
+ * @brief フレームの中身
  */
 typedef struct {
   /** 宛先ID */
@@ -55,52 +50,83 @@ typedef struct {
   /** 送信元ID */
   uint8_t source_id;
   /** ペイロード長(バイト数) */
-  uint16_t payload_length;
+  uint8_t payload_length;
   /** ペイロードデータ */
   uint8_t payload[SPACE_BALLOON_COMMUNICATION_FORMAT_MAX_PAYLOAD_SIZE];
-  /** ペイロードのCRCチェックサム */
-  uint16_t crc_checksum;
-  /** 現在の処理位置(バイト数) */
-  uint16_t index;
 } space_balloon_communication_format_t;
 
+/**
+ * @struct space_balloon_communication_format_decoder_t
+ * @brief デコードの途中の状態．受信するストリームごとに 1 つ用意する．
+ *
+ * packet 以外のメンバは内部用なので直接触らない．
+ */
+typedef struct {
+  /** 読み終えた（または読みかけの）フレーム */
+  space_balloon_communication_format_t packet;
+  /** 受け取った CRC（内部用） */
+  uint16_t crc_checksum;
+  /** ペイロードの何バイト目まで読んだか（内部用） */
+  uint8_t index;
+  /** 今どこを読んでいるか（内部用） */
+  uint8_t state;
+  /** 直前が 0x7D だったか（内部用） */
+  uint8_t is_stuffed;
+} space_balloon_communication_format_decoder_t;
 
-/** 
+/**
  * @fn
- * @brief パケットをクリアする
- * @param packet クリアするパケット
-*/
+ * @brief パケットを空にする
+ * @param packet 空にするパケット
+ */
 void space_balloon_communication_format_clear(space_balloon_communication_format_t *packet);
 
-/** 
+/**
  * @fn
- * @brief CRC16チェックサムを計算する
+ * @brief CRC16 チェックサムを計算する（CRC-16/CCITT-FALSE）
  * @param data チェックサムを計算するデータ
  * @param length チェックサムを計算するデータの長さ
- * @return CRC16チェックサム
+ * @return CRC16 チェックサム
  */
-uint16_t space_balloon_communication_format_calculate_crc_checksum(uint8_t *data, uint16_t length);
+uint16_t space_balloon_communication_format_calculate_crc_checksum(const uint8_t *data,
+                                                                   uint16_t length);
 
-/** 
+/**
  * @fn
- * @brief パケットにデコードしたいデータを1byteずつこの関数に渡す。順次データがpacketに格納されていく。完了するとSPACE_BALLOON_COMMUNICATION_FORMAT_COMPLETED = 1を返す。
- * @param packet デコードするパケット
- * @param input デコードするデータ
- * @return デコード結果: 成功: SPACE_BALLOON_COMMUNICATION_FORMAT_VALID = 0, 完了: SPACE_BALLOON_COMMUNICATION_FORMAT_COMPLETED = 1
+ * @brief パケットをフレームにして output に書く．
+ *
+ * CRC はヘッダ（宛先ID・送信元ID・ペイロード長）とペイロードが対象．
+ * output は SPACE_BALLOON_COMMUNICATION_FORMAT_MAX_FRAME_SIZE バイトあれば必ず足りる．
+ * @param packet エンコードするパケット
+ * @param output フレームを書く先
+ * @param capacity output の大きさ
+ * @return 書いたバイト数．output が足りなければ 0
+ */
+size_t space_balloon_communication_format_encode(const space_balloon_communication_format_t *packet,
+                                                 uint8_t *output, size_t capacity);
+
+/**
+ * @fn
+ * @brief デコーダを初期状態にする（開始マーカーを待つ）
+ * @param decoder 初期化するデコーダ
+ */
+void space_balloon_communication_format_decoder_init(
+    space_balloon_communication_format_decoder_t *decoder);
+
+/**
+ * @fn
+ * @brief 受信したバイトを 1 つずつ渡す．
+ *
+ * SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_COMPLETED を返したら，decoder->packet にフレームの
+ * 中身が入っている（次の開始マーカーが来るまで変わらない）．
+ * エラーを返したあとも，そのままバイトを渡し続ければ次のフレームから読み直す．
+ * @param decoder デコーダ
+ * @param input 受信したバイト
+ * @return 読んだ結果
  * @see space_balloon_communication_format_decode_result_t
  */
 space_balloon_communication_format_decode_result_t space_balloon_communication_format_decode(
-    space_balloon_communication_format_t *packet, const uint8_t input);
-
-/** 
- * @fn
- * @brief パケットをエンコードする。実行するたびにパケットのデータを1byteずつエンコードする。完了するとSPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_COMPLETED = 1を返す。
- * @param packet エンコードするパケット
- * @param output エンコードされたデータ
- * @return エンコード結果: 成功: SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_SUCCESS = 0, 完了: SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_COMPLETED = 1
- */
-space_balloon_communication_format_encode_result_t space_balloon_communication_format_encode(
-    space_balloon_communication_format_t *packet, uint8_t *output);
+    space_balloon_communication_format_decoder_t *decoder, uint8_t input);
 
 #ifdef __cplusplus
 }

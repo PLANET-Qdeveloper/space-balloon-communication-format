@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 project(space_balloon_communication_format
     VERSION 1.0.0
     DESCRIPTION "Communication decode and encode library"
-    LANGUAGES C ASM
+    LANGUAGES C
 )
 
 set(CMAKE_C_STANDARD 99)
@@ -15,6 +15,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(BUILD_TESTS "Build tests" ON)
+option(BUILD_EXAMPLES "Build examples" ON)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 
 set(CMAKE_C_FLAGS_DEBUG "-g -O0 -Wall -Wextra -Wpedantic")
@@ -43,6 +44,10 @@ target_include_directories(space_balloon_communication_format PUBLIC
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+if(BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
 set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})

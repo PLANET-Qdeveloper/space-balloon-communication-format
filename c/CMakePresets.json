@@ -33,6 +33,7 @@
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
                 "EMBEDDED_BUILD": "ON",
                 "BUILD_TESTS": "OFF",
+                "BUILD_EXAMPLES": "OFF",
                 "BUILD_SHARED_LIBS": "OFF"
             }
         }

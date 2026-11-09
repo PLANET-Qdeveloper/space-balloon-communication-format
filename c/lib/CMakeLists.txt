@@ -1,11 +1,11 @@
 set(SPACE_BALLOON_COMMUNICATION_FORMAT_SOURCES
     src/space_balloon_communication_format.c
+    src/tlv.c
 )
 
 set(SPACE_BALLOON_COMMUNICATION_FORMAT_HEADERS
     include/space_balloon_communication_format/space_balloon_communication_format.h
-    include/space_balloon_communication_format/types.h
-    include/space_balloon_communication_format/config.h
+    include/space_balloon_communication_format/tlv.h
 )
 
 set(SPACE_BALLOON_COMMUNICATION_FORMAT_PRIVATE_HEADERS
