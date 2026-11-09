@@ -11,7 +11,7 @@
 
 成層圏気球から、地上へセンサの値を届けるための通信フォーマットです。
 
-PLANET-Q の共通通信フォーマット（`pq_com_format`）をフレームにして、地上のテレメバックエンドが対応表を見ながら中身を読みます。
+PLANET-Q の共通通信フォーマット（`space_balloon_communication_format`）をフレームにして、地上のテレメバックエンドが対応表を見ながら中身を読みます。
 
 ## 🫧 なにをするの
 
@@ -19,8 +19,8 @@ PLANET-Q の共通通信フォーマット（`pq_com_format`）をフレーム�
 
 | 層 | やること | 場所 |
 | --- | --- | --- |
-| フレーム | バイト列のエンコード・デコード。開始・終了マーカー、宛先 / 送信元、CRC、バイトスタッフィング | C: [`c/`](c/)（いまここ）<br>Rust: [`rust/crates/pq-com-format`](rust/crates/pq-com-format)（移植中） |
-| 解釈 | 対応表に沿って TLV を名前付きの値にする | Rust: [`rust/crates/downlink`](rust/crates/downlink)（移植中） |
+| フレーム | バイト列のエンコード・デコード。開始・終了マーカー、宛先 / 送信元、CRC、バイトスタッフィング | C: [`c/`](c/)（いまここ）<br>Rust: [`rust/`](rust/)（`format.rs`） |
+| 解釈 | 対応表に沿って TLV を名前付きの値にする | Rust: [`rust/`](rust/)（`tag.rs` / `payload.rs` / `catalog.rs`） |
 | 対応表 | ノード ID とタグの定義 | [`spec/downlink.yaml`](spec/downlink.yaml)（例） |
 
 ## 📦 フレームのかたち
@@ -33,7 +33,7 @@ PLANET-Q の共通通信フォーマット（`pq_com_format`）をフレーム�
 
 ペイロードは `Tag(1) + Length(1) + Value(n)` をそのままつなげたもの。途中に `0x7E` / `0x7F` / `0x7D` が出てきたら、区切りと混ざらないようにスタッフィングします。
 
-フレームの詳細は [docs/pq_com_format.md](docs/pq_com_format.md) にまとめてあります。
+フレームの詳細は [docs/space_balloon_communication_format.md](docs/space_balloon_communication_format.md) にまとめてあります。
 
 ## 🗂️ なかみ
 
@@ -66,7 +66,7 @@ ctest --preset default
 cargo test --manifest-path rust/Cargo.toml
 ```
 
-ワークスペースは `pq-com-format` と `downlink` の 2 クレートです。中身は、これからふくらませていきます。
+クレート名は `space-balloon-communication-format` です。yaml の読み込み（`catalog`）は feature で、外すときは `--no-default-features` を付けます。
 
 ## 📜 ライセンス
 

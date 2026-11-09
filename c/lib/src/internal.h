@@ -1,7 +1,7 @@
-#ifndef PQ_COM_FORMAT_INTERNAL_H
-#define PQ_COM_FORMAT_INTERNAL_H
+#ifndef SPACE_BALLOON_COMMUNICATION_FORMAT_INTERNAL_H
+#define SPACE_BALLOON_COMMUNICATION_FORMAT_INTERNAL_H
 
-#include "pq_com_format/pq_com_format.h"
+#include "space_balloon_communication_format/space_balloon_communication_format.h"
 
 #ifdef __cplusplus
 extern "C" {

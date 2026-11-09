@@ -1,11 +1,11 @@
-#include "pq_com_format/pq_com_format.h"
+#include "space_balloon_communication_format/space_balloon_communication_format.h"
 #include <string.h>
 
-void pq_com_format_clear(pq_com_format_t *packet) {
-  memset(packet, 0, sizeof(pq_com_format_t));
+void space_balloon_communication_format_clear(space_balloon_communication_format_t *packet) {
+  memset(packet, 0, sizeof(space_balloon_communication_format_t));
 }
 
-uint16_t pq_com_format_calculate_crc_checksum(uint8_t *data, uint16_t length) {
+uint16_t space_balloon_communication_format_calculate_crc_checksum(uint8_t *data, uint16_t length) {
   uint16_t crc = 0xFFFF;
   for (uint16_t i = 0; i < length; i++) {
     crc ^= (uint16_t)data[i] << 8;
@@ -34,20 +34,20 @@ typedef enum {
   DECODE_STATE_END,
 } decode_state_t;
 
-pq_com_format_decode_result_t pq_com_format_decode(
-    pq_com_format_t *packet, const uint8_t input) {
+space_balloon_communication_format_decode_result_t space_balloon_communication_format_decode(
+    space_balloon_communication_format_t *packet, const uint8_t input) {
   static decode_state_t state = DECODE_STATE_WAIT_START;
   static uint8_t is_stuffed = 0;
   uint8_t current_byte = input;
 
   if (state == DECODE_STATE_WAIT_START) {
-    if (input == PQ_COM_FORMAT_START_MARKER) {
-      pq_com_format_clear(packet);
+    if (input == SPACE_BALLOON_COMMUNICATION_FORMAT_START_MARKER) {
+      space_balloon_communication_format_clear(packet);
       state = DECODE_STATE_DESTINATION_ID;
       is_stuffed = 0;
-      return PQ_COM_FORMAT_DECODE_VALID;
+      return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_VALID;
     }
-    return PQ_COM_FORMAT_DECODE_ERROR_INVALID_HEADER;
+    return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_INVALID_HEADER;
   }
 
   if (is_stuffed) {
@@ -64,27 +64,27 @@ pq_com_format_decode_result_t pq_com_format_decode(
       break;
     default:
       state = DECODE_STATE_WAIT_START;
-      return PQ_COM_FORMAT_DECODE_ERROR_UNDEFINED;
+      return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_UNDEFINED;
     }
   } else {
     if (current_byte == 0x7D) {
       is_stuffed = 1;
-      return PQ_COM_FORMAT_DECODE_VALID;
+      return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_VALID;
     }
   }
 
-  if (current_byte == PQ_COM_FORMAT_END_MARKER) {
+  if (current_byte == SPACE_BALLOON_COMMUNICATION_FORMAT_END_MARKER) {
     if (state != DECODE_STATE_END) {
       state = DECODE_STATE_WAIT_START;
-      return PQ_COM_FORMAT_DECODE_ERROR_INVALID_FOOTER;
+      return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_INVALID_FOOTER;
     }
     uint16_t calculated_crc =
-        pq_com_format_calculate_crc_checksum(packet->payload, packet->payload_length);
+        space_balloon_communication_format_calculate_crc_checksum(packet->payload, packet->payload_length);
     state = DECODE_STATE_WAIT_START;
     if (calculated_crc == packet->crc_checksum) {
-      return PQ_COM_FORMAT_DECODE_COMPLETED;
+      return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_COMPLETED;
     } else {
-      return PQ_COM_FORMAT_DECODE_ERROR_INVALID_CHECKSUM;
+      return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_INVALID_CHECKSUM;
     }
   }
 
@@ -99,9 +99,9 @@ pq_com_format_decode_result_t pq_com_format_decode(
     break;
   case DECODE_STATE_PAYLOAD_LENGTH:
     packet->payload_length = current_byte;
-    if (packet->payload_length > PQ_COM_FORMAT_MAX_PAYLOAD_SIZE) {
+    if (packet->payload_length > SPACE_BALLOON_COMMUNICATION_FORMAT_MAX_PAYLOAD_SIZE) {
       state = DECODE_STATE_WAIT_START;
-      return PQ_COM_FORMAT_DECODE_ERROR_UNDEFINED;
+      return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_UNDEFINED;
     }
     packet->index = 0;
     state = (packet->payload_length == 0) ? DECODE_STATE_CRC_1
@@ -125,21 +125,21 @@ pq_com_format_decode_result_t pq_com_format_decode(
   case DECODE_STATE_END:
     // error
     state = DECODE_STATE_WAIT_START;
-    return PQ_COM_FORMAT_DECODE_ERROR_UNDEFINED;
+    return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_ERROR_UNDEFINED;
   }
 
-  return PQ_COM_FORMAT_DECODE_VALID;
+  return SPACE_BALLOON_COMMUNICATION_FORMAT_DECODE_VALID;
 }
 
-pq_com_format_encode_result_t pq_com_format_encode(
-    pq_com_format_t *packet, uint8_t *output) {
+space_balloon_communication_format_encode_result_t space_balloon_communication_format_encode(
+    space_balloon_communication_format_t *packet, uint8_t *output) {
   static uint8_t stuffed_byte = 0;
   static uint8_t stuffing_active = 0;
 
   if (stuffing_active) {
     *output = stuffed_byte;
     stuffing_active = 0;
-    return PQ_COM_FORMAT_ENCODE_SUCCESS;
+    return SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_SUCCESS;
   }
 
   uint8_t byte_to_encode;
@@ -147,17 +147,17 @@ pq_com_format_encode_result_t pq_com_format_encode(
   uint16_t frame_len_without_markers = 3 + payload_len + 2;
 
   if (packet->index == 0) {
-    *output = PQ_COM_FORMAT_START_MARKER;
+    *output = SPACE_BALLOON_COMMUNICATION_FORMAT_START_MARKER;
     packet->crc_checksum =
-        pq_com_format_calculate_crc_checksum(packet->payload, payload_len);
+        space_balloon_communication_format_calculate_crc_checksum(packet->payload, payload_len);
     packet->index++;
-    return PQ_COM_FORMAT_ENCODE_SUCCESS;
+    return SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_SUCCESS;
   }
 
   if (packet->index > frame_len_without_markers) {
-    *output = PQ_COM_FORMAT_END_MARKER;
+    *output = SPACE_BALLOON_COMMUNICATION_FORMAT_END_MARKER;
     packet->index = 0;
-    return PQ_COM_FORMAT_ENCODE_COMPLETED;
+    return SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_COMPLETED;
   }
 
   uint16_t current_pos = packet->index - 1;
@@ -190,5 +190,5 @@ pq_com_format_encode_result_t pq_com_format_encode(
   }
 
   packet->index++;
-  return PQ_COM_FORMAT_ENCODE_SUCCESS;
+  return SPACE_BALLOON_COMMUNICATION_FORMAT_ENCODE_SUCCESS;
 }
