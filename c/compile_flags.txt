@@ -1,0 +1,6 @@
+-xc
+-std=c99
+-Wall
+-Wextra
+-Wpedantic
+-Ilib/include

@@ -1,0 +1,7 @@
+-xc++
+-std=c++11
+-Wall
+-Wextra
+-Wpedantic
+-Iinclude
+-I../c/lib/include

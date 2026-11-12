@@ -5,13 +5,14 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust" />
   <img src="https://img.shields.io/badge/C-00599C?style=for-the-badge&logo=c&logoColor=white" alt="C" />
+  <img src="https://img.shields.io/badge/C%2B%2B-00599C?style=for-the-badge&logo=cplusplus&logoColor=white" alt="C++" />
   <img src="https://img.shields.io/github/license/PLANET-Qdeveloper/space-balloon-communication-format?style=for-the-badge" alt="License" />
   <img src="https://img.shields.io/github/repo-size/PLANET-Qdeveloper/space-balloon-communication-format?style=for-the-badge" alt="Repo Size" />
 </p>
 
 成層圏気球から、地上へセンサの値を届けるための通信フォーマットです。
 
-PLANET-Q の共通通信フォーマット（`pq_com_format`）をフレームにして、地上のテレメバックエンドが対応表を見ながら中身を読みます。
+PLANET-Q の共通通信フォーマット（`space_balloon_communication_format`）をフレームにして、地上のテレメバックエンドが対応表を見ながら中身を読みます。
 
 ## 🫧 なにをするの
 
@@ -19,8 +20,8 @@ PLANET-Q の共通通信フォーマット（`pq_com_format`）をフレーム�
 
 | 層 | やること | 場所 |
 | --- | --- | --- |
-| フレーム | バイト列のエンコード・デコード。開始・終了マーカー、宛先 / 送信元、CRC、バイトスタッフィング | C: [`c/`](c/)（いまここ）<br>Rust: [`rust/crates/pq-com-format`](rust/crates/pq-com-format)（移植中） |
-| 解釈 | 対応表に沿って TLV を名前付きの値にする | Rust: [`rust/crates/downlink`](rust/crates/downlink)（移植中） |
+| フレーム | バイト列のエンコード・デコード。開始・終了マーカー、宛先 / 送信元、CRC、バイトスタッフィング | C: [`c/`](c/)<br>C++: [`cpp/`](cpp/)<br>Rust: [`rust/`](rust/)（`format.rs`） |
+| 解釈 | TLV の読み書き。Rust は対応表に沿って名前付きの値にする | C / C++: `tlv.h` / `tlv.hpp`<br>Rust: [`rust/`](rust/)（`tag.rs` / `payload.rs` / `catalog.rs`） |
 | 対応表 | ノード ID とタグの定義 | [`spec/downlink.yaml`](spec/downlink.yaml)（例） |
 
 ## 📦 フレームのかたち
@@ -31,15 +32,18 @@ PLANET-Q の共通通信フォーマット（`pq_com_format`）をフレーム�
 0x7E | 宛先ID | 送信元ID | ペイロード長 | ペイロード | CRC16 | 0x7F
 ```
 
+CRC16 は宛先ID からペイロードまでに対して計算します（CRC-16/CCITT-FALSE、上位バイトが先）。
+
 ペイロードは `Tag(1) + Length(1) + Value(n)` をそのままつなげたもの。途中に `0x7E` / `0x7F` / `0x7D` が出てきたら、区切りと混ざらないようにスタッフィングします。
 
-フレームの詳細は [docs/pq_com_format.md](docs/pq_com_format.md) にまとめてあります。
+フレームの詳細は [docs/space_balloon_communication_format.md](docs/space_balloon_communication_format.md) にまとめてあります。
 
 ## 🗂️ なかみ
 
 ```text
-c/        いま動いている C の実装とテスト
-rust/     これから育てる Rust ワークスペース
+c/        C の実装（C99、リエントラント）とテスト・例
+cpp/      C の実装を包んだ C++ のヘッダ（C++11、Arduino でも使える）
+rust/     Rust の実装（基準になる実装）
 spec/     「このタグは気圧」のような対応表
 docs/     プロトコルの説明
 scripts/  対応表まわりの小さなお手伝い
@@ -60,13 +64,21 @@ ctest --preset default
 
 リリース用は preset 名を `release` に、基板に載せる用（テストなし）は `embedded` にしてください。
 
+### C++
+
+```sh
+cmake -S cpp -B cpp/build -G Ninja
+cmake --build cpp/build
+ctest --test-dir cpp/build --output-on-failure
+```
+
 ### Rust
 
 ```sh
 cargo test --manifest-path rust/Cargo.toml
 ```
 
-ワークスペースは `pq-com-format` と `downlink` の 2 クレートです。中身は、これからふくらませていきます。
+クレート名は `space-balloon-communication-format` です。yaml の読み込み（`catalog`）は feature で、外すときは `--no-default-features` を付けます。
 
 ## 📜 ライセンス
 

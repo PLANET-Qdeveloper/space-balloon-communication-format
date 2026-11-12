@@ -1,5 +1,0 @@
-
-
-include("${CMAKE_CURRENT_LIST_DIR}/pq_com_format_targets.cmake")
-
-check_required_components(pq_com_format)
